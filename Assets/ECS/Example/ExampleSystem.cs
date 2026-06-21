@@ -1,52 +1,57 @@
+using System;
 using Svelto.ECS;
 using UnityEngine;
 
 namespace ECS.Example
 {
-    public class ExampleSystem : ISystem, IQueryingEntitiesEngine,
-        IReactOnAddEx<ExampleComponent>, IReactOnRemoveEx<ExampleComponent>
+    public class ExampleSystem : ISystem, IReadySystem,
+        IReactOnAddEx<ExampleComponent1>, IReactOnRemoveEx<ExampleComponent1>
     {
-        public EntitiesDB entitiesDB { get; set; }
+        public World World { get; set; }
 
         private EntitiesDB.SveltoFilters filters;
 
         public void Ready()
         {
-            filters = entitiesDB.GetFilters();
-            filters.GetOrCreateTransientFilter<ExampleComponent>(ExampleFilters.ExampleFilter);
+            filters = World.GetFilters();
+            filters.GetOrCreateTransientFilter<ExampleComponent1>(ExampleFilters.ExampleFilter);
         }
 
         public void Update()
         {
-            var (components, entityIDs, count) = entitiesDB.QueryEntities<ExampleComponent>(World.DefaultGroup);
-            var exampleFilter = filters.GetTransientFilter<ExampleComponent>(ExampleFilters.ExampleFilter);
+            var (components, entityIDs, count) = World.QueryComponents<ExampleComponent1>(ExampleEntity1.Group);
+            var exampleFilter = filters.GetTransientFilter<ExampleComponent1>(ExampleFilters.ExampleFilter);
             Debug.Log($"ExampleSystem found {count} example entities, {exampleFilter.ComputeFinalCount()} filtered entities");
+
+            World.QueryComponents<ExampleComponent2>(ExampleEntity2.Group)
+                .Each((uint id, ref ExampleComponent2 _) =>
+                {
+                    Debug.Log("Removing example entity 2");
+                    World.RemoveEntity(id, ExampleEntity2.Group);
+                });
         }
 
-        public void Add((uint start, uint end) rangeOfEntities, in EntityCollection<ExampleComponent> entities,
+        public void Add((uint start, uint end) rangeOfEntities, in EntityCollection<ExampleComponent1> entities,
             ExclusiveGroupStruct groupID)
         {
-            var (components, entityIDs, _) = entities;
             var count = rangeOfEntities.end - rangeOfEntities.start;
-
             Debug.Log($"ExampleSystem received event of {count} entities added");
 
-            var exampleFilter = filters.GetTransientFilter<ExampleComponent>(ExampleFilters.ExampleFilter);
-            for (var i = rangeOfEntities.start; i < rangeOfEntities.end; i++)
+            var exampleFilter = filters.GetTransientFilter<ExampleComponent1>(ExampleFilters.ExampleFilter);
+            entities.Each(rangeOfEntities, (uint id, ref ExampleComponent1 ec) =>
             {
-                if (components[i].AddToFilter)
+                if (ec.AddToFilter)
                 {
-                    exampleFilter.Add(new EGID(entityIDs[i], groupID), i);
+                    var index = World.QueryIndex<ExampleComponent1>(id, groupID);
+                    exampleFilter.Add(new EGID(id, groupID), index);
                 }
-            }
+            });
         }
 
-        public void Remove((uint start, uint end) rangeOfEntities, in EntityCollection<ExampleComponent> entities,
+        public void Remove((uint start, uint end) rangeOfEntities, in EntityCollection<ExampleComponent1> entities,
             ExclusiveGroupStruct groupID)
         {
-            var (_, entityIDs, _) = entities;
             var count = rangeOfEntities.end - rangeOfEntities.start;
-
             Debug.Log($"ExampleSystem received event of {count} entities removed");
         }
     }
